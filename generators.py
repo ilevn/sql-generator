@@ -4,10 +4,21 @@ import time
 
 from argon2 import PasswordHasher
 
+# https://github.com/imsky/wordlists, Licenced: Copyright (c) 2017-2019 Ivan Malopinsky
 FIRSTS = open("first.txt").readlines()
 LASTS = open("last.txt").readlines()
+
 PW_HASHER = PasswordHasher()
 PRINTABLE = list(string.ascii_letters + string.digits + string.punctuation)
+
+
+class Result:
+    def __init__(self, result, extra=None):
+        self.result = result
+        self.extra = extra
+
+    def __repr__(self):
+        return repr(self.result)
 
 
 def _choices_str(seq, k=1):
@@ -24,10 +35,10 @@ def str_time_prop(start, end, format, prop):
 
 
 def date_generator(_):
-    # TODO: Events future
-    start = "01/01/1999"
-    end = "01/01/2020"
-    return str_time_prop(start, end, '%d/%m/%Y', random.random())
+    # TODO: Events are usually scheduled in the future.
+    start = "1999-01-01"
+    end = "2020-01-01"
+    return Result(str_time_prop(start, end, '%Y-%m-%d', random.random()))
 
 
 def _get_random_string(length):
@@ -36,8 +47,12 @@ def _get_random_string(length):
 
 
 def text_generator(column):
-    length = column.character_maximum_length
-    return _get_random_string(length or random.randint(60, 300))
+    if length := column.character_maximum_length:
+        length = random.randint(1, length)
+    else:
+        length = random.randint(60, 300)
+
+    return _get_random_string(length)
 
 
 def _name_generator(is_first=True):
@@ -50,22 +65,28 @@ def _name_generator(is_first=True):
 
 
 def first_name_generator(_):
-    return _name_generator(is_first=True)
+    return Result(_name_generator(is_first=True))
 
 
 def last_name_generator(_):
-    return _name_generator(is_first=False)
+    return Result(_name_generator(is_first=False))
 
 
 def integer_generator(column):
     limit = 32767 if column.data_type == "smallint" else 2147483646  # postgres limit.
-    return random.randint(1, limit)
+    return Result(random.randint(1, limit))
+
+
+# aliases
+smallint_generator = integer_generator
+numeric_generator = integer_generator
 
 
 def password_generator(_):
     random.shuffle(PRINTABLE)
     random_password = ''.join(_choices_str(PRINTABLE, k=random.randint(6, 20)))
-    return PW_HASHER.hash(random_password)
+    # Return the clear-text password as well.
+    return Result(PW_HASHER.hash(random_password), random_password)
 
 
 def email_generator(column):
@@ -73,17 +94,17 @@ def email_generator(column):
     domain = "tickify" if is_staff else _choices_str(string.ascii_lowercase, k=5)
     tld = random.choice(("com", "net", "nl", "de", "co.uk"))
     name = _choices_str(list(string.digits + string.ascii_lowercase), k=random.randint(4, 10))
-    return f"{name}@{domain}.{tld}"
+    return Result(f"{name}@{domain}.{tld}")
 
 
 def phone_generator(_):
     numbers = _choices_str(list(range(1, 9)), k=12)
     country = random.choice(["49", "53", "10", "11", "43"])
-    return f"+{country} {numbers}"
+    return Result(f"+{country} {numbers}")
 
 
 def boolean_generator(_):
-    return bool(random.choice((1, 0)))
+    return Result(random.choice(("TRUE", "FALSE")))
 
 
 def get_converter(t):
