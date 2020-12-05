@@ -1,6 +1,8 @@
 import random
 from collections import defaultdict
 
+import toposort
+
 from analyser import Analyser
 from generators import password_generator, first_name_generator, last_name_generator, text_generator, email_generator, \
     phone_generator, get_converter
@@ -14,6 +16,9 @@ def flatten_dict_list(table_statements):
 
 
 def write_results_to_file(statements, dest="output.sql", should_truncate=False, pre_face=""):
+    if not isinstance(statements, dict):
+        raise TypeError(f"statements should be a dict, not {type(statements)}.")
+
     if should_truncate:
         pre_face = "\n".join(f"TRUNCATE TABLE {table} RESTART IDENTITY CASCADE;" for table in statements)
     statements = flatten_dict_list(statements)
@@ -27,21 +32,10 @@ def write_results_to_file(statements, dest="output.sql", should_truncate=False, 
         f.write("\n".join(statements))
 
 
-def format_insert_statement_for_row(table, data):
-    """INSERT INTO table (...) VALUES (...)"""
-    columns = ", ".join(data.keys())
-    values = ", ".join(map(repr, data.values()))
-    extra = ""
-    if table.name in ("buyer", "organizer", "moderator", "admin"):
-        # Display their clear-text password.
-        extra = f"\n-- Clear-text password: {data['password_hash'].extra} --\n"
-
-    return f"{extra}INSERT INTO {table.name} ({columns}) OVERRIDING SYSTEM VALUE VALUES ({values});"
-
-
 class Generator:
-    def __init__(self, connection):
+    def __init__(self, connection, password_tables=None, custom_converters=None):
         self.analyser = Analyser(connection)
+        self.password_tables = password_tables or ()
         self.converters = {
             'password_hash': password_generator,
             'first_name': first_name_generator,
@@ -49,11 +43,23 @@ class Generator:
             'character varying': text_generator,
             'email': email_generator,
             'phone': phone_generator,
+            **(custom_converters or {})
         }
         # Table references for foreign key relations.
         self.id_refs = defaultdict(list)
-        self.tables = _tables = sorted([self.analyser.get_table_info(t.table_name) for t in self.analyser.get_tables()],
-                                       key=lambda t: t.num_fkeys)
+        self.tables = [self.analyser.get_table_info(table) for table in
+                       toposort.toposort_flatten(self.analyser.generate_dependency_graph())]
+
+    def format_insert_statement_for_row(self, table, data):
+        """INSERT INTO table (...) VALUES (...)"""
+        columns = ", ".join(data.keys())
+        values = ", ".join(map(repr, data.values()))
+        extra = ""
+        if table.name in self.password_tables:
+            # Display their clear-text password.
+            extra = f"\n-- Clear-text password: {data['password_hash'].extra} --\n"
+
+        return f"{extra}INSERT INTO {table.name} ({columns}) OVERRIDING SYSTEM VALUE VALUES ({values});"
 
     def generate_single_table_data(self, table, curr_id=1):
         data = {}
@@ -69,11 +75,13 @@ class Generator:
         for fk_column in table.foreign_keys:
             try:
                 foreign_ids = self.id_refs[fk_column.foreign_table]
-            except KeyError:
+                assert len(foreign_ids) > 0
+            except (KeyError, AssertionError):
                 # Oh no!
                 fmt = f"FATAL: NO FOREIGN KEY ID FOR FK COLUMN {fk_column.column_name}" \
-                      f" of {table} (foreign table {fk_column.foreign_table}"
+                      f" of {table} (foreign table {fk_column.foreign_table})"
                 print(fmt)
+                exit(1)
             else:
                 data[fk_column.column_name] = random.choice(foreign_ids)
         return data
@@ -95,7 +103,7 @@ class Generator:
             data.append(self.generate_single_table_data(table, i))
             i += 1
 
-        formatted_data = [format_insert_statement_for_row(table, d) for d in data]
+        formatted_data = [self.format_insert_statement_for_row(table, d) for d in data]
         if table.has_id_column:
             formatted_data.append(f"ALTER SEQUENCE {table}_id_seq RESTART WITH {i};")
 

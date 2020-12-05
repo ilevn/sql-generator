@@ -1,14 +1,36 @@
-import psycopg2
+"""
+The MIT License (MIT)
 
+Copyright (c) 2020 Nils T.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+"""
+
+import psycopg2
 import psycopg2.extras
 
 
 class Table:
-    def __init__(self, name, columns, foreign_keys, referenced_by):
+    def __init__(self, name, columns, foreign_keys):
         self.name = name
         self.columns = columns
         self.foreign_keys = foreign_keys
-        self.referenced_by = referenced_by
         self.has_id_column = "id" in [c.name for c in self.columns]
 
     @property
@@ -29,8 +51,7 @@ class Analyser:
     def get_table_info(self, table):
         columns = self.get_columns(table)
         foreign_columns = self._get_foreign_keys_for(table)
-        referenced_by = self.get_table_references(table)
-        return Table(table, columns, foreign_columns, referenced_by)
+        return Table(table, columns, foreign_columns)
 
     def execute_cursor(self, stmt, args=None):
         cursor = self.connection.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
@@ -39,15 +60,6 @@ class Analyser:
         # Close the cursor.
         cursor.close()
         return columns
-
-    def get_table_references(self, table):
-        stmt = """SELECT
-                  (SELECT r.relname FROM pg_class r WHERE r.oid = c.conrelid) AS ref_table,
-                  (SELECT array_agg(attname) FROM pg_attribute
-                   WHERE attrelid = c.conrelid AND ARRAY[attnum] <@ c.conkey) AS col
-                   FROM pg_constraint c
-                   WHERE c.confrelid = (SELECT oid FROM pg_class WHERE relname = %(table_name)s);"""
-        return self.execute_cursor(stmt, {"table_name": table})
 
     def get_columns(self, table_name):
         stmt = """SELECT column_name AS name, CASE is_nullable 
@@ -86,3 +98,37 @@ class Analyser:
                   ORDER BY table_schema, table_name;"""
 
         return self.execute_cursor(stmt)
+
+    def get_table_deps(self):
+        stmt = """WITH fkeys AS (
+                    SELECT c.conrelid          AS table_id,
+                           c_fromtable.relname AS tablename,
+                           c.confrelid         AS parent_id,
+                           c_totable.relname   AS parent_tablename
+                    FROM pg_constraint c
+                             JOIN pg_namespace n ON n.oid = c.connamespace
+                             JOIN pg_class c_fromtable ON c_fromtable.oid = c.conrelid
+                             JOIN pg_namespace c_fromtablens ON c_fromtablens.oid = c_fromtable.relnamespace
+                             JOIN pg_class c_totable ON c_totable.oid = c.confrelid
+                             JOIN pg_namespace c_totablens ON c_totablens.oid = c_totable.relnamespace
+                    WHERE c.contype = 'f'
+                )
+                
+                SELECT t.tablename,
+                       array_agg(parent_tablename) FILTER ( WHERE parent_tablename IS NOT NULL ) p_tables
+                FROM pg_tables t
+                         LEFT JOIN fkeys ON t.tablename = fkeys.tablename
+                WHERE t.schemaname NOT IN ('pg_catalog', 'information_schema')
+                GROUP BY t.tablename
+            ORDER BY 2 NULLS FIRST"""
+
+        return self.execute_cursor(stmt)
+
+    def generate_dependency_graph(self):
+        nodes = {}
+        for dep in self.get_table_deps():
+            if dep.p_tables is None:
+                nodes[dep.tablename] = set()
+            else:
+                nodes[dep.tablename] = set(dep.p_tables)
+        return nodes
