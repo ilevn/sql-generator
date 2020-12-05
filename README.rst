@@ -10,37 +10,40 @@ and data types.
 
 Installation
 ------------
+
 **Python 3.9 or higher is required**
 
 To install the module, run the following command:
-```
-# Linux/macOS
-python3 -m pip install -U sql-generator
 
-# Windows
-py -3 -m pip install -U sql-generator
+.. code:: sh
 
-# Poetry
-poetry add sql-generator
-```
+    # Linux/macOS
+    python3 -m pip install -U sql-generator
+    
+    # Windows
+    py -3 -m pip install -U sql-generator
+    
+    # Poetry
+    poetry add sql-generator
+
 Usage
 -----
 
-```python
-from sql_generator import Generator, write_results_to_file
-import psycopg2
+.. code:: py
 
-# Custom converter for all columns or data types with
-# `custom_a` as name.
-def gen_column_a(column):
-    return f"My data type is {column.data_type}!"
-
-conn = psycopg2.connect("your dsn")
-gen = Generator(conn, custom_converters={"column_a": gen_column_a})
-# Amount of inserts per table.
-amounts = {"table_a": 50, "table_b": 25, "table_c": 100}
-generated_statements: dict = gen.generate_table_data_for_all(amounts)
-# Write generated statements to file.
-# You can optionally truncate your db with `should_truncate=True`.
-write_results_to_file(generated_statements, dest="your_output.sql")
-```
+    from sql_generator import Generator, write_results_to_file
+    import psycopg2
+    
+    # Custom converter for all columns or data types with
+    # `custom_a` as name.
+    def gen_column_a(column):
+        return f"My data type is {column.data_type}!"
+    
+    conn = psycopg2.connect("your dsn")
+    gen = Generator(conn, custom_converters={"column_a": gen_column_a})
+    # Amount of inserts per table.
+    amounts = {"table_a": 50, "table_b": 25, "table_c": 100}
+    generated_statements: dict = gen.generate_table_data_for_all(amounts)
+    # Write generated statements to file.
+    # You can optionally truncate your db with `should_truncate=True`.
+    write_results_to_file(generated_statements, dest="your_output.sql")
