@@ -1,4 +1,5 @@
-# sql-generator
+sql-generator
+=============
 
 This tool lets you generate postgresql insert statements for common data types.  
 It's pretty minimalistic at the moment but offers support for basic statements 
@@ -7,10 +8,26 @@ and foreign key relations.
 In addition to that, `sql-generator` supports custom generators for table columns
 and data types.
 
-## Usage
+Installation
+------------
+**Python 3.9 or higher is required**
+
+To install the module, run the following command:
+```
+# Linux/macOS
+python3 -m pip install -U sql-generator
+
+# Windows
+py -3 -m pip install -U sql-generator
+
+# Poetry
+poetry add sql-generator
+```
+Usage
+-----
 
 ```python
-from generator import Generator, write_results_to_file
+from sql_generator import Generator, write_results_to_file
 import psycopg2
 
 # Custom converter for all columns or data types with

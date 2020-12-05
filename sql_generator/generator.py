@@ -3,8 +3,8 @@ from collections import defaultdict
 
 import toposort
 
-from analyser import Analyser
-from generators import password_generator, first_name_generator, last_name_generator, text_generator, email_generator, \
+from .analyser import Analyser
+from .generators import password_generator, first_name_generator, last_name_generator, text_generator, email_generator, \
     phone_generator, get_converter
 
 

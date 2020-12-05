@@ -29,8 +29,8 @@ import time
 from argon2 import PasswordHasher
 
 # https://github.com/imsky/wordlists, Licenced: Copyright (c) 2017-2019 Ivan Malopinsky
-FIRSTS = open("first.txt").readlines()
-LASTS = open("last.txt").readlines()
+FIRSTS = open("sql_generator/resources/first.txt").readlines()
+LASTS = open("sql_generator/resources/last.txt").readlines()
 
 PW_HASHER = PasswordHasher()
 PRINTABLE = list(string.ascii_letters + string.digits + string.punctuation)
