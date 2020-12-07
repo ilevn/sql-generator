@@ -61,16 +61,17 @@ class Analyser:
         cursor.close()
         return columns
 
-    def get_columns(self, table_name):
+    def get_columns(self, table_name, schema="public"):
         stmt = """SELECT column_name AS name, CASE is_nullable 
                   WHEN 'NO' THEN FALSE ELSE TRUE END AS nullable,
-                  data_type, character_maximum_length, table_name
+                  data_type, character_maximum_length, table_name, column_default AS default_value,
+                  udt_name::regtype
                   FROM information_schema.columns
                   WHERE table_schema = %(table_schema)s
                   AND table_name   = %(table_name)s
                   ORDER BY ordinal_position;"""
 
-        return self.execute_cursor(stmt, {"table_schema": "public", "table_name": table_name})
+        return self.execute_cursor(stmt, {"table_schema": schema, "table_name": table_name})
 
     def _get_foreign_keys_for(self, table):
         stmt = """SELECT tc.constraint_name,
@@ -115,7 +116,7 @@ class Analyser:
                 )
                 
                 SELECT t.tablename,
-                       array_agg(parent_tablename) FILTER ( WHERE parent_tablename IS NOT NULL ) p_tables
+                       ARRAY_AGG(parent_tablename) FILTER ( WHERE parent_tablename IS NOT NULL ) p_tables
                 FROM pg_tables t
                          LEFT JOIN fkeys ON t.tablename = fkeys.tablename
                 WHERE t.schemaname NOT IN ('pg_catalog', 'information_schema')
