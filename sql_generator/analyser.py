@@ -26,16 +26,37 @@ import psycopg2
 import psycopg2.extras
 
 
+class Column:
+    __slots__ = (
+        "name", "nullable",
+        "data_type", "max_length",
+        "table_name", "default_value",
+        "udt_name", "has_ref", "is_unique", "sequence"
+    )
+
+    def __init__(self, record):
+        # WIP.
+        for attr in record._fields:
+            setattr(self, attr, getattr(record, attr))
+
+    @property
+    def is_sequence(self):
+        return self.data_type in ("integer", "bigint") and self.sequence is not None
+
+    def __str__(self):
+        return f"{self.table_name}.{self.name}"
+
+
 class Table:
     def __init__(self, name, columns, foreign_keys):
-        self.name = name
-        self.columns = columns
-        self.foreign_keys = foreign_keys
-        self.has_id_column = "id" in [c.name for c in self.columns]
+        self.name: str = name
+        self.foreign_columns = foreign_keys
+        self.columns: list[Column] = [col for col in columns if
+                                      col.name not in [x.column_name for x in self.foreign_columns]]
 
     @property
     def num_fkeys(self):
-        return len(self.foreign_keys)
+        return len(self.foreign_columns)
 
     def __repr__(self):
         return f"<{self.name} - {self.num_fkeys} fkeys>"
@@ -48,8 +69,8 @@ class Analyser:
     def __init__(self, connection):
         self.connection = connection
 
-    def get_table_info(self, table):
-        columns = self.get_columns(table)
+    def get_table_info(self, table) -> Table:
+        columns = [Column(x) for x in self.get_columns(table)]
         foreign_columns = self._get_foreign_keys_for(table)
         return Table(table, columns, foreign_columns)
 
@@ -62,14 +83,47 @@ class Analyser:
         return columns
 
     def get_columns(self, table_name, schema="public"):
-        stmt = """SELECT column_name AS name, CASE is_nullable 
-                  WHEN 'NO' THEN FALSE ELSE TRUE END AS nullable,
-                  data_type, character_maximum_length, table_name, column_default AS default_value,
-                  udt_name::regtype
-                  FROM information_schema.columns
-                  WHERE table_schema = %(table_schema)s
-                  AND table_name   = %(table_name)s
-                  ORDER BY ordinal_position;"""
+        stmt = """WITH u_refs AS (SELECT attname
+                FROM pg_attribute a
+                         JOIN pg_constraint c ON a.attrelid = c.conrelid AND ARRAY [a.attnum] <@ c.conkey
+                WHERE c.conrelid = %(table_name)s::regclass
+                  AND c.contype = 'u')
+
+               , refs AS (SELECT confrelid::regclass,
+                                 af.attname AS fcol,
+                                 conrelid::regclass,
+                                 a.attname  AS col
+                          FROM pg_attribute af,
+                               pg_attribute a,
+                               (SELECT conrelid, confrelid, conkey[i] AS conkey, confkey[i] AS confkey
+                                FROM (SELECT conrelid,
+                                             confrelid,
+                                             conkey,
+                                             confkey,
+                                             GENERATE_SERIES(1, ARRAY_UPPER(conkey, 1)) AS i
+                                      FROM pg_constraint
+                                      WHERE contype = 'f') ss) ss2
+                          WHERE af.attnum = confkey
+                            AND af.attrelid = confrelid
+                            AND a.attnum = conkey
+                            AND a.attrelid = conrelid
+                            AND confrelid::regclass = %(table_name)s::regclass
+            )
+            
+            SELECT column_name                                          AS name,
+                   is_nullable::bool                                    AS nullable,
+                   data_type,
+                   character_maximum_length                             AS max_length,
+                   table_name,
+                   column_default                                       AS default_value,
+                   udt_name::regtype,
+                   (SELECT column_name IN (SELECT fcol FROM refs))      AS has_ref,
+                   (SELECT column_name IN (SELECT attname FROM u_refs)) AS is_unique,
+                   (SELECT PG_GET_SERIAL_SEQUENCE(table_name, column_name)) AS sequence
+            FROM information_schema.columns
+            WHERE table_schema = %(table_schema)s
+              AND table_name = %(table_name)s
+            ORDER BY ordinal_position;"""
 
         return self.execute_cursor(stmt, {"table_schema": schema, "table_name": table_name})
 

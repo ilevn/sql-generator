@@ -65,7 +65,7 @@ def interval_generator(_):
 
 
 def text_generator(column):
-    if length := column.character_maximum_length:
+    if length := column.max_length:
         length = random.randint(1, length)
     else:
         length = random.randint(60, 300)
@@ -95,7 +95,7 @@ def money_generator(_):
 
 
 def bit_generator(column):
-    length = column.character_maximum_length
+    length = column.max_length
     if column.data_type == "bit varying":
         # Length only has an upper bound.
         length = random.randint(1, length)
