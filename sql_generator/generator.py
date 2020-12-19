@@ -91,8 +91,8 @@ class Generator:
 
     def generate_table_data(self, table, amount=1):
         formatted_data = []
-        for table_id in range(1, amount + 1):
-            table_data = self.generate_single_table_data(table, table_id)
+        for row_id in range(1, amount + 1):
+            table_data = self.generate_single_table_data(table, row_id)
             formatted_data.append(self.format_sql_statement_for_row(table, table_data))
 
         if table.has_id_column:
@@ -108,6 +108,5 @@ class Generator:
             amount = amount_per_table[table.name]
             generated_table_data[table.name] = self.generate_table_data(table, amount)
 
-        total_entries = __import__("functools").reduce(lambda a, b: a + b, amount_per_table.values())
-        print(f"Done - Generated {total_entries} statements for {len(self.tables)} tables!")
+        print(f"Done - Generated {sum(amount_per_table.values())} statements for {len(self.tables)} tables!")
         return generated_table_data
