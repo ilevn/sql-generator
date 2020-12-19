@@ -34,16 +34,17 @@ Usage
     from sql_generator import Generator, write_results_to_file
     import psycopg2
     
-    # Custom converter for all columns or data types with
-    # `custom_a` as name.
+    # Custom generator for all columns with `custom_a` as name.
     def gen_column_a(column):
         return f"My data type is {column.data_type}!"
-    
+
     conn = psycopg2.connect("your dsn")
-    gen = Generator(conn, custom_converters={"column_a": gen_column_a})
+    gen = Generator(conn, column_generators={"column_a": gen_column_a})
+
     # Amount of inserts per table.
     amounts = {"table_a": 50, "table_b": 25, "table_c": 100}
     generated_statements: dict = gen.generate_table_data_for_all(amounts)
+
     # Write generated statements to file.
     # You can optionally truncate your db with `should_truncate=True`.
     write_results_to_file(generated_statements, dest="your_output.sql")
