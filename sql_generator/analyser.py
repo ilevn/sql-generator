@@ -58,21 +58,24 @@ class Table:
     def num_fkeys(self):
         return len(self.foreign_columns)
 
-    def __repr__(self):
-        return f"<{self.name} - {self.num_fkeys} fkeys>"
-
     def __str__(self):
         return self.name
+
+    def __eq__(self, other):
+        return self.name == other.name
+
+    def __hash__(self):
+        return hash(self.name)
 
 
 class Analyser:
     def __init__(self, connection):
         self.connection = connection
 
-    def get_table_info(self, table) -> Table:
-        columns = [Column(x) for x in self.get_columns(table)]
+    def get_table_info(self, table, schema="public") -> Table:
+        columns = [Column(x) for x in self.get_columns(table, schema)]
         foreign_columns = self._get_foreign_keys_for(table)
-        return Table(table, columns, foreign_columns)
+        return Table(f"{schema}.{table}", columns, foreign_columns)
 
     def execute_cursor(self, stmt, args=None):
         cursor = self.connection.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
