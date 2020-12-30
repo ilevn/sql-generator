@@ -28,18 +28,20 @@ import string
 
 from sql_generator.utils import Result, choices_as_string
 
+
+def __read_resource(path):
+    with open(path) as f:
+        return f.readlines()
+
+
 # https://github.com/imsky/wordlists, Licenced: Copyright MIT (c) 2017-2019 Ivan Malopinsky
 base = os.path.dirname(os.path.abspath(__file__))
-FIRSTS = open(base + "/resources/first.txt").readlines()
-LASTS = open(base + "/resources/last.txt").readlines()
+FIRSTS = __read_resource(base + "/resources/first.txt")
+LASTS = __read_resource(base + "/resources/last.txt")
 
 
 def _name_generator(is_first=True):
-    if is_first:
-        source = FIRSTS
-    else:
-        source = LASTS
-
+    source = FIRSTS if is_first else LASTS
     return random.choice(source).strip().capitalize()
 
 
