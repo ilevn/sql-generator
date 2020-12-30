@@ -1,7 +1,7 @@
 sql-generator
 =============
 
-This tool lets you generate postgresql insert statements for common data types.  
+This tool lets you generate postgresql insert and copy statements for common data types.
 It's pretty minimalistic at the moment but offers support for basic statements 
 and foreign key relations.
 
@@ -31,12 +31,17 @@ Usage
 
 .. code:: py
 
-    from sql_generator import Generator, write_results_to_file
+    import logging
     import psycopg2
-    
+    from sql_generator import Generator, write_statements_as_copy, write_statements_as_insert
+
+    logging.basicConfig(level=logging.INFO)
+
+
     # Custom generator for all columns with `custom_a` as name.
     def gen_column_a(column):
         return f"My data type is {column.data_type}!"
+
 
     conn = psycopg2.connect("your dsn")
     gen = Generator(conn, column_generators={"column_a": gen_column_a})
@@ -45,6 +50,9 @@ Usage
     amounts = {"table_a": 50, "table_b": 25, "table_c": 100}
     generated_statements: dict = gen.generate_table_data_for_all(amounts)
 
-    # Write generated statements to file.
+    # Write generated statements as INSERTs to file.
     # You can optionally truncate your db with `should_truncate=True`.
-    write_results_to_file(generated_statements, dest="your_output.sql")
+    write_statements_as_insert(generated_statements, dest="insert_output.sql")
+
+    # Write generated statements as COPYs to file.
+    write_statements_as_copy(generated_statements, dest="copy_output.sql")
