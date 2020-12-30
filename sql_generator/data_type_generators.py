@@ -131,7 +131,7 @@ def array_generator(column):
             return Result("{}")
 
     # Mangle the data-type for the pass-through func.
-    column = column._replace(data_type=d_type)
+    column.data_type = d_type
     elements = "{" + ", ".join(f"\"{generator(column).raw}\"" for _ in range(random.randint(1, 20))) + "}"
     return Result(elements)
 
