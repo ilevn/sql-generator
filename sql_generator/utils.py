@@ -24,6 +24,9 @@ THE SOFTWARE.
 
 import random
 import string
+from typing import Callable
+
+from sql_generator.analyser import Column
 
 
 class Result:
@@ -37,6 +40,9 @@ class Result:
 
     def __repr__(self):
         return self.result
+
+
+GEN_FUNC = Callable[[Column], Result]
 
 
 def choices_as_string(seq, k=1):
