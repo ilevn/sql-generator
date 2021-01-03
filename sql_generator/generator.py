@@ -21,6 +21,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
+
 import logging
 import random
 from collections import defaultdict
@@ -34,24 +35,23 @@ log = logging.getLogger(__name__)
 
 
 class Generator:
-    def __init__(self, connection, data_type_generators=None, column_generators=None):
+    def __init__(self, connection, schema="public", data_type_generators=None, column_generators=None):
         self.analyser = Analyser(connection)
+        self.schema = schema
         # Custom generators for data types and columns.
         self.data_type_generators = data_type_generators or {}
         self.column_generators = column_generators or {}
         # Table references for foreign key relations.
         self.refs = defaultdict(list)
         self.unique_values = defaultdict(set)
-        self.tables = [self.analyser.get_table_info(table) for table in
+        self.tables = [self.analyser.get_table_info(table, schema) for table in
                        toposort.toposort_flatten(self.analyser.generate_dependency_graph())]
 
     def _handle_reg_columns(self, columns, curr_id):
         col_data = {}
         for column in columns:
-            col_value = self._generate_column_data(column)
-            if column.is_sequence:
-                col_value = curr_id
-            elif column.is_unique:
+            col_value = curr_id if column.is_sequence else self._generate_column_data(column)
+            if column.is_unique:
                 # Ensure value is unique.
                 while col_value in self.unique_values[str(column)]:
                     col_value = self._generate_column_data(column)
@@ -89,7 +89,7 @@ class Generator:
             try:
                 generator = get_generator(d_type)
             except KeyError:
-                log.critical(f"Unsupported data type `{d_type}` for column `{column.name}`. "
+                log.critical(f"Unsupported data type `{d_type}` for column `{column}`. "
                              "Please use a custom generator for this.")
                 # Make pycharm happy.
                 return exit(1)
@@ -97,15 +97,17 @@ class Generator:
         return generator(column)
 
     def generate_table_data(self, table, amount=1):
-        data = []
-        for row_id in range(1, amount + 1):
-            data.append(self.generate_row_data(table, row_id))
-        return data
+        return tuple(self.generate_row_data(table, row_id) for row_id in range(1, amount + 1))
 
-    def generate_table_data_for_all(self, amount_per_table):
+    def __get_table_name(self, table_name, ignore_schema):
+        return table_name.removeprefix(self.schema + ".") if ignore_schema else table_name
+
+    def generate_table_data_for_all(self, amount_per_table, ignore_schema=True):
         generated_table_data = {}
         for table in self.tables:
-            amount = amount_per_table[table.name]
+            # Process table name, this is important when it comes to generators.
+            table_name = self.__get_table_name(table.name, ignore_schema)
+            amount = amount_per_table[table_name]
             generated_table_data[table] = self.generate_table_data(table, amount)
 
         log.info(f"Done - Generated {sum(amount_per_table.values())} statements for {len(self.tables)} tables!")

@@ -31,7 +31,7 @@ _S = dict[Table, list[dict]]
 
 
 def _format_insert_statement_for_row(table, data, *_):
-    columns = ", ".join(data.keys())
+    columns = ", ".join(data)
     values = ", ".join(map(repr, data.values()))
     return f"INSERT INTO {table} ({columns}) OVERRIDING SYSTEM VALUE VALUES ({values});"
 
@@ -39,7 +39,7 @@ def _format_insert_statement_for_row(table, data, *_):
 def _format_copy_statement_for_row(table, data, row_id, *_):
     fmt = ""
     if row_id == 0:
-        columns = ", ".join(data.keys())
+        columns = ", ".join(data)
         fmt += f"COPY {table.name} ({columns}) FROM stdin;\n"
 
     values = "\t".join(str(getattr(r, "raw", r)) for r in data.values())
@@ -68,8 +68,7 @@ class InsertFormatter:
     def format_statements(self, preface: str = ""):
         formatted_data = []
         if self.should_truncate:
-            table_names = self.statements.keys()
-            preface += "\n".join(f"TRUNCATE TABLE {table} RESTART IDENTITY CASCADE;" for table in table_names)
+            preface += "\n".join(f"TRUNCATE TABLE {table} RESTART IDENTITY CASCADE;" for table in self.statements)
 
         for table, rows in self.statements.items():
             seq_fmt = "ALTER SEQUENCE {seq_name} RESTART WITH {next_id};\n"
@@ -137,9 +136,9 @@ def write_statements_as_copy(statements: _S, dest: str = "output.sql") -> None:
 AVAILABLE_FORMATTERS = {"INSERT": write_statements_as_insert, "COPY": write_statements_as_copy}
 
 
-def write_statements_as(format_, statements: _S, dest: str = "output.sql", **kwargs):
+def write_statements_as(format, statements: _S, dest: str = "output.sql", **kwargs):
     try:
-        formatter = AVAILABLE_FORMATTERS[format_]
-    except KeyError as e:
-        raise NotImplementedError(f"Format '{format_}' is not supported!") from e
+        formatter = AVAILABLE_FORMATTERS[format]
+    except KeyError:
+        raise NotImplementedError(f"Format '{format}' is not supported!") from None
     return formatter(statements, dest, **kwargs)
