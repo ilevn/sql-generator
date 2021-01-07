@@ -121,7 +121,7 @@ class Generator:
 
         return generator(column)
 
-    def generate_table_data(self, table: Table, amount=1) -> tuple[dict[str, Result]]:
+    def generate_table_data(self, table: Table, amount: int = 1) -> tuple[dict[str, Result]]:
         """
         Generate statements for a table.
 
