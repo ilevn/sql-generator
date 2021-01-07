@@ -26,7 +26,9 @@ from datetime import datetime
 
 from sql_generator.analyser import Table
 
-__all__ = ("InsertFormatter", "write_statements_as_insert", "write_statements_as_copy", "write_statements_as")
+__all__ = ("InsertFormatter", "write_statements_as_insert", "write_statements_as_copy",
+           "write_statements_as", "AVAILABLE_FORMATTERS")
+
 _S = dict[Table, list[dict]]
 
 
@@ -61,6 +63,8 @@ def _format_table(table, data, func, seq_fmt, end_pad, *args):
 
 
 class InsertFormatter:
+    """INSERT statement producing formatter"""
+
     def __init__(self, should_truncate: bool, statements: _S):
         self.should_truncate = should_truncate
         self.statements = statements
@@ -79,11 +83,16 @@ class InsertFormatter:
 
 
 class CopyFormatter:
+    """COPY statement producing formatter"""
+
     def __init__(self, statements: _S):
         self.statements = statements
 
     @staticmethod
     def get_security_headers():
+        """
+        Return the security headers for a COPY statement block.
+        """
         fmt = (
             "SET statement_timeout = 0;\n"
             "SET lock_timeout = 0;\n"
@@ -99,6 +108,7 @@ class CopyFormatter:
         return fmt
 
     def format_statements(self, preface: str = ""):
+        """Format the resulting statements."""
         formatted_data = [self.get_security_headers()]
 
         for table, rows in self.statements.items():
@@ -122,12 +132,27 @@ def _write_to_file(statements: list[str], dest="output.sql", preface: str = "") 
 
 
 def write_statements_as_insert(statements: _S, dest: str = "output.sql", should_truncate: bool = False) -> None:
+    """
+    Transform statement data into INSERTs.
+
+    :param statements: The statements to generate INSERTs from.
+    :param dest: The output destination.
+    :param should_truncate: Whether truncate statements should be prepended to the output.
+    :return: Formatted INSERT statements
+    """
     formatter = InsertFormatter(should_truncate, statements)
     preface, data = formatter.format_statements()
     _write_to_file(data, dest, preface)
 
 
 def write_statements_as_copy(statements: _S, dest: str = "output.sql") -> None:
+    """
+    Transform statement data into COPYs.
+    This writes directly to the specified output file.
+
+    :param statements: The statements to generate COPYs from.
+    :param dest: The output destination.
+    """
     formatter = CopyFormatter(statements)
     preface, data = formatter.format_statements()
     _write_to_file(data, dest, preface)
@@ -137,6 +162,17 @@ AVAILABLE_FORMATTERS = {"INSERT": write_statements_as_insert, "COPY": write_stat
 
 
 def write_statements_as(format, statements: _S, dest: str = "output.sql", **kwargs):
+    """
+    Transform statement data into formatted statements using the provided formatter.
+    This writes directly to the specified output file.
+
+    Note: This a convenience function for the underlying specific format functions.
+
+    :param format: The formatter to use.
+    :param statements: The statements to format.
+    :param dest: The output destination.
+    :param kwargs: Additional arguments passed to the underlying format function.
+    """
     try:
         formatter = AVAILABLE_FORMATTERS[format]
     except KeyError:

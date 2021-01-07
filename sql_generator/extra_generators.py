@@ -46,14 +46,17 @@ def _name_generator(is_first=True):
 
 
 def first_name_generator(_):
+    """Generator for randomised first names."""
     return Result(_name_generator(is_first=True))
 
 
 def last_name_generator(_):
+    """Generator for randomised last names."""
     return Result(_name_generator(is_first=False))
 
 
 def email_generator(_):
+    """Generator for email addresses."""
     domain = choices_as_string(string.ascii_lowercase, k=5)
     tld = random.choice(("com", "net", "nl", "de", "co.uk"))
     name = choices_as_string(list(string.digits + string.ascii_lowercase), k=random.randint(4, 10))
@@ -61,6 +64,7 @@ def email_generator(_):
 
 
 def phone_generator(_):
+    """Generator for phone number strings with plus prefixed country code."""
     numbers = choices_as_string(list(range(1, 9)), k=12)
     country = random.choice(["49", "53", "10", "11", "43"])
     return Result(f"+{country} {numbers}")

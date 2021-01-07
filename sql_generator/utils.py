@@ -30,9 +30,15 @@ from sql_generator.analyser import Column
 
 
 class Result:
+    """Wrapper for data type and column generators."""
     __slots__ = ("raw", "result", "extra", "use_repr")
 
     def __init__(self, result, extra=None, use_repr=True):
+        """
+        :param result: The value to wrap.
+        :param extra: Extra information about a value.
+        :param use_repr: Whether __repr__ should be applied to the value.
+        """
         self.raw = result
         self.result = repr(result) if use_repr else result
         self.extra = extra
@@ -46,9 +52,11 @@ GEN_FUNC = Callable[[Column], Result]
 
 
 def choices_as_string(seq, k=1):
+    """Format random choices as a joined string."""
     return ''.join(map(str, random.choices(seq, k=k)))
 
 
 def get_random_string(length):
+    """Generate a random string from lowercase ascii letters."""
     letters = string.ascii_lowercase
     return ''.join(random.choices(letters, k=length))

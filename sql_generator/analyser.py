@@ -27,6 +27,7 @@ import psycopg2.extras
 
 
 class Column:
+    """Column type for introspected table columns."""
     __slots__ = (
         "name", "nullable",
         "data_type", "max_length",
@@ -41,6 +42,7 @@ class Column:
 
     @property
     def is_sequence(self):
+        """Return whether the column is a sequence."""
         return self.data_type in ("integer", "bigint") and self.sequence is not None
 
     def __str__(self):
@@ -48,7 +50,14 @@ class Column:
 
 
 class Table:
+    """Table type for introspected databases."""
+
     def __init__(self, name, columns, foreign_keys):
+        """
+        :param name: The qualified name of the table with schema.
+        :param columns: All distinct table columns.
+        :param foreign_keys: All distinct foreign keys. Does not overlap with `columns`.
+        """
         self.name: str = name
         self.foreign_columns = foreign_keys
         self.columns: list[Column] = [col for col in columns if
@@ -73,11 +82,12 @@ class Analyser:
         self.connection = connection
 
     def get_table_info(self, table, schema="public") -> Table:
-        columns = [Column(x) for x in self.get_columns(table, schema)]
+        """Return information about a table with qualifying schema."""
+        columns = [Column(x) for x in self._get_columns(table, schema)]
         foreign_columns = self._get_foreign_keys_for(table)
         return Table(f"{schema}.{table}", columns, foreign_columns)
 
-    def execute_cursor(self, stmt, args=None):
+    def _execute_cursor(self, stmt, args=None):
         cursor = self.connection.cursor(cursor_factory=psycopg2.extras.NamedTupleCursor)
         cursor.execute(stmt, args)
         columns = cursor.fetchall()
@@ -85,12 +95,12 @@ class Analyser:
         cursor.close()
         return columns
 
-    def get_columns(self, table_name, schema="public"):
+    def _get_columns(self, table_name, schema="public"):
         stmt = """WITH u_refs AS (SELECT attname
                 FROM pg_attribute a
                          JOIN pg_constraint c ON a.attrelid = c.conrelid AND ARRAY [a.attnum] <@ c.conkey
                 WHERE c.conrelid = %(table_name)s::regclass
-                  AND c.contype = 'u')
+                  AND C.contype = 'u')
 
                , refs AS (SELECT confrelid::regclass,
                                  af.attname AS fcol,
@@ -128,7 +138,7 @@ class Analyser:
               AND table_name = %(table_name)s
             ORDER BY ordinal_position;"""
 
-        return self.execute_cursor(stmt, {"table_schema": schema, "table_name": table_name})
+        return self._execute_cursor(stmt, {"table_schema": schema, "table_name": table_name})
 
     def _get_foreign_keys_for(self, table):
         stmt = """SELECT tc.constraint_name,
@@ -145,19 +155,20 @@ class Analyser:
                   WHERE tc.constraint_type = 'FOREIGN KEY'
                   AND tc.table_name =  %(table_name)s;"""
 
-        return self.execute_cursor(stmt, {"table_name": table})
+        return self._execute_cursor(stmt, {"table_name": table})
 
     def get_tables(self):
+        """Return all tables for the specified database."""
         stmt = """SELECT table_schema, table_name
                   FROM information_schema.tables
                   WHERE table_schema != 'pg_catalog'
                   AND table_schema != 'information_schema'
                   AND table_type='BASE TABLE'
-                  ORDER BY table_schema, table_name;"""
+                  ORDER BY table_schema, TABLE_NAME;"""
 
-        return self.execute_cursor(stmt)
+        return self._execute_cursor(stmt)
 
-    def get_table_deps(self):
+    def _get_table_deps(self):
         stmt = """WITH fkeys AS (
                     SELECT c.conrelid          AS table_id,
                            c_fromtable.relname AS tablename,
@@ -180,11 +191,12 @@ class Analyser:
                 GROUP BY t.tablename
             ORDER BY 2 NULLS FIRST"""
 
-        return self.execute_cursor(stmt)
+        return self._execute_cursor(stmt)
 
     def generate_dependency_graph(self):
+        """Generate a topological dependency graph for the specified database."""
         nodes = {}
-        for dep in self.get_table_deps():
+        for dep in self._get_table_deps():
             if dep.p_tables is None:
                 nodes[dep.tablename] = set()
             else:

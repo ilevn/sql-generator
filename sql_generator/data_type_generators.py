@@ -46,18 +46,22 @@ def _generate_integer(lower, upper):
 
 
 def date_generator(_):
+    """Generator for https://www.postgresql.org/docs/current/datatype-datetime.html"""
     return Result(_time_const_generator(fmt="%Y-%m-%d"))
 
 
 def time_generator(_):
+    """Generator for https://www.postgresql.org/docs/current/datatype-datetime.html"""
     return Result(_time_const_generator(fmt="%H:%M:%S"))
 
 
 def timestamp_generator(_):
+    """Generator for https://www.postgresql.org/docs/current/datatype-datetime.html"""
     return Result(_time_const_generator(fmt="%Y-%m-%d %H:%M:%S"))
 
 
 def interval_generator(_):
+    """Generator for https://www.postgresql.org/docs/current/datatype-datetime.html"""
     # We're generating the year separately.
     year = f"{random.randint(1, 100)} years"
     value = _time_const_generator(" %m months %d days %H hours %M minutes %S seconds")
@@ -65,6 +69,7 @@ def interval_generator(_):
 
 
 def text_generator(column):
+    """Generator for https://www.postgresql.org/docs/current/datatype-character.html"""
     if length := column.max_length:
         length = random.randint(1, length)
     else:
@@ -74,27 +79,33 @@ def text_generator(column):
 
 
 def smallint_generator(_):
+    """Generator for https://www.postgresql.org/docs/current/datatype-numeric.html"""
     return Result(_generate_integer(-32768, 32767))
 
 
 def integer_generator(_):
+    """Generator for https://www.postgresql.org/docs/current/datatype-numeric.html"""
     return Result(_generate_integer(-2147483648, 2147483647))
 
 
 def bigint_generator(_):
+    """Generator for https://www.postgresql.org/docs/current/datatype-numeric.html"""
     return Result(_generate_integer(-9223372036854775808, 9223372036854775807))
 
 
 def numeric_generator(_):
+    """Generator for https://www.postgresql.org/docs/current/datatype-numeric.html"""
     # Technically NUMERIC supports up to 131072 digits past the decimal point.
     return Result(f'{random.randint(0, 1_000_000_000):d}.{random.randint(0, 10000000):d}')
 
 
 def money_generator(_):
+    """Generator for https://www.postgresql.org/docs/current/datatype-money.html"""
     return Result(_generate_integer(-92233720368547758.08, 92233720368547758.07))
 
 
 def bit_generator(column):
+    """Generator for https://www.postgresql.org/docs/current/datatype-bit.html"""
     length = column.max_length
     if column.data_type == "bit varying":
         # Length only has an upper bound.
@@ -105,19 +116,28 @@ def bit_generator(column):
 
 
 def uuid_generator(_):
+    """Generator for https://www.postgresql.org/docs/current/datatype-uuid.html"""
     return Result(str(uuid4()))
 
 
 def boolean_generator(_):
+    """Generator for https://www.postgresql.org/docs/current/datatype-boolean.html"""
     return Result(random.choice(("TRUE", "FALSE")), use_repr=False)
 
 
 def bytea_generator(_):
+    """Generator for https://www.postgresql.org/docs/current/datatype-binary.html"""
     value = fr"'\x{''.join(f'{i:02x}' for i in random.randbytes(10))}'"
     return Result(value, use_repr=False)
 
 
 def array_generator(column):
+    """
+    Generator for https://www.postgresql.org/docs/current/arrays.html
+
+    Note: This only offers partial support for arrays
+    due to type inference issues.
+    """
     # This is not fully supported because postgresql's arrays
     # are horrible (no type inference for N-dim arrays).
     d_type = column.udt_name.lower()[:-2]
