@@ -144,6 +144,10 @@ class Generator:
                               (e.g 'a' instead of 'public.a').
         :return: The resulting statement data for all tables.
         """
+        # Flush pre-existing data.
+        self.refs.clear()
+        self.unique_values.clear()
+
         generated_table_data = {}
         for table in self.tables:
             # Process table name, this is important when it comes to generators.
