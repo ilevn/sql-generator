@@ -29,7 +29,7 @@ from sql_generator.analyser import Table
 __all__ = ("InsertFormatter", "write_statements_as_insert", "write_statements_as_copy",
            "write_statements_as", "AVAILABLE_FORMATTERS")
 
-_S = dict[Table, list[dict]]
+_S = dict[Table, tuple[dict]]
 
 
 def _format_insert_statement_for_row(table, data, *_):
@@ -138,7 +138,6 @@ def write_statements_as_insert(statements: _S, dest: str = "output.sql", should_
     :param statements: The statements to generate INSERTs from.
     :param dest: The output destination.
     :param should_truncate: Whether truncate statements should be prepended to the output.
-    :return: Formatted INSERT statements
     """
     formatter = InsertFormatter(should_truncate, statements)
     preface, data = formatter.format_statements()
@@ -161,7 +160,7 @@ def write_statements_as_copy(statements: _S, dest: str = "output.sql") -> None:
 AVAILABLE_FORMATTERS = {"INSERT": write_statements_as_insert, "COPY": write_statements_as_copy}
 
 
-def write_statements_as(format, statements: _S, dest: str = "output.sql", **kwargs):
+def write_statements_as(format, statements: _S, dest: str = "output.sql", **kwargs) -> None:
     """
     Transform statement data into formatted statements using the provided formatter.
     This writes directly to the specified output file.
