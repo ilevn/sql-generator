@@ -105,11 +105,18 @@ class Generator:
                 data[fk_column.column_name] = random.choice(foreign_values)
         return data
 
+    def _get_column_generator(self, column):
+        try:
+            # Attempt to use the fully qualified table name.
+            return self.column_generators[str(column)]
+        except KeyError:
+            return self.column_generators.get(column.name)
+
     def _generate_column_data(self, column):
         d_type = column.data_type.lower()
         try:
             # Check for special generators first.
-            generator = self.column_generators.get(column.name) or self.data_type_generators[d_type]
+            generator = self._get_column_generator(column) or self.data_type_generators[d_type]
         except KeyError:
             try:
                 generator = get_generator(d_type)
