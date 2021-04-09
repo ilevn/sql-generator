@@ -127,7 +127,7 @@ def _write_to_file(statements: list[str], dest="output.sql", preface: str = "") 
         f.write(f"  This file was generated on {now}. \n")
         f.write("  sql-generator (https://github.com/ilevn/sql-generator)\n")
         f.write("*/\n\n")
-        f.write(preface + "\n")
+        f.write(preface + "\n\n")
         f.write("\n".join(statements))
 
 
