@@ -195,10 +195,4 @@ class Analyser:
 
     def generate_dependency_graph(self):
         """Generate a topological dependency graph for the specified database."""
-        nodes = {}
-        for dep in self._get_table_deps():
-            if dep.p_tables is None:
-                nodes[dep.tablename] = set()
-            else:
-                nodes[dep.tablename] = set(dep.p_tables)
-        return nodes
+        return {dep.tablename: set(dep.p_tables) if dep.p_tables else set() for dep in self._get_table_deps()}

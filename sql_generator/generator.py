@@ -25,9 +25,9 @@ THE SOFTWARE.
 import logging
 import random
 from collections import defaultdict
+from graphlib import TopologicalSorter as Sorter
 from typing import Optional
 
-import toposort
 from psycopg2.extensions import connection as con
 
 from . import Result
@@ -63,7 +63,7 @@ class Generator:
         self.refs = defaultdict(list)
         self.unique_values = defaultdict(set)
         self.tables = [self.analyser.get_table_info(table, schema) for table in
-                       toposort.toposort_flatten(self.analyser.generate_dependency_graph())]
+                       Sorter(self.analyser.generate_dependency_graph()).static_order()]
 
     def _handle_reg_columns(self, columns, curr_id):
         col_data = {}
