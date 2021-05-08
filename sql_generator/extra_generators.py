@@ -55,6 +55,13 @@ def last_name_generator(_):
     return Result(_name_generator(is_first=False))
 
 
+def first_and_last_name_generator(_):
+    """Generator for full names."""
+    first = _name_generator()
+    last = _name_generator(is_first=False)
+    return Result(first + " " + last)
+
+
 def email_generator(_):
     """Generator for email addresses."""
     domain = choices_as_string(string.ascii_lowercase, k=5)
