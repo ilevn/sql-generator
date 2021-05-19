@@ -35,10 +35,29 @@ from .analyser import Analyser, Table
 from .data_type_generators import get_generator
 from .utils import GEN_FUNC
 
-# Type alias.
+# Type aliases.
 GEN_DICT = Optional[dict[str, GEN_FUNC]]
+ROW_DICT = Optional[dict[str, type]]
+TABLE_DATA = tuple[dict[str, Result]]
 
 log = logging.getLogger(__name__)
+
+
+def _init_generator_class(generator: type, columns):
+    if not issubclass(generator, RowGenerator):
+        raise TypeError(f"Unsupported row generator {generator}")
+    return generator(columns)
+
+
+class RowGenerator:
+    def __init__(self, columns):
+        self.columns = columns
+
+    def generate(self, curr_id) -> dict[str, Result]:
+        return NotImplemented
+
+    def compute_not_covered(self, covered):
+        return {col for col in self.columns if col.name not in covered}
 
 
 class Generator:
@@ -47,7 +66,10 @@ class Generator:
     """
 
     def __init__(self, connection: con, schema: str = "public", data_type_generators: GEN_DICT = None,
-                 column_generators: GEN_DICT = None):
+                 column_generators: GEN_DICT = None,
+                 row_generators: ROW_DICT = None,
+                 seq_access: list[str] = None
+                 ):
         """
         :param connection: The psycopg2 database connection.
         :param schema: The database schema.
@@ -59,11 +81,18 @@ class Generator:
         # Custom generators for data types and columns.
         self.data_type_generators = data_type_generators or {}
         self.column_generators = column_generators or {}
+        self.row_generators = row_generators or {}
+        self.seq_access = seq_access or []
+        self._cached_generators = {}
         # Table references for foreign key relations.
         self.refs = defaultdict(list)
         self.unique_values = defaultdict(set)
         self.tables = [self.analyser.get_table_info(table, schema) for table in
                        Sorter(self.analyser.generate_dependency_graph()).static_order()]
+
+    def _reset_state(self):
+        for storage in (self.refs, self.unique_values, self._cached_generators):
+            storage.clear()
 
     def _handle_reg_columns(self, columns, curr_id):
         col_data = {}
@@ -81,6 +110,23 @@ class Generator:
             col_data[column.name] = col_value
         return col_data
 
+    def _get_external(self, table_name, columns) -> RowGenerator:
+        try:
+            return self._cached_generators[table_name]
+        except KeyError:
+            if (generator := self.row_generators.get(table_name)) is not None:
+                self._cached_generators[table_name] = instance = _init_generator_class(generator, columns)
+                return instance
+
+    def _generate_row_data(self, table_name, columns, curr_id) -> dict[str, Result]:
+        if (row_gen := self._get_external(table_name, columns)) is not None:
+            partial_data: dict = row_gen.generate(curr_id)
+            # Generate data for columns that are not covered by the row generator.
+            partial_data.update(self._handle_reg_columns(row_gen.compute_not_covered(partial_data.keys()), curr_id))
+            return partial_data
+
+        return self._handle_reg_columns(columns, curr_id)
+
     def generate_row_data(self, table: Table, curr_id: int = 1) -> dict[str, Result]:
         """
         Generate row data for each column of a table.
@@ -89,11 +135,12 @@ class Generator:
         :param curr_id: Sequence ID of the new row.
         :return: New row data.
         """
-        data = self._handle_reg_columns(table.columns, curr_id)
+        data = self._generate_row_data(table.name, table.columns, curr_id)
         # Also handle foreign key columns.
         for fk_column in table.foreign_columns:
+            c_name = f"{fk_column.foreign_table}.{fk_column.foreign_column}"
             try:
-                foreign_values = self.refs[f"{fk_column.foreign_table}.{fk_column.foreign_column}"]
+                foreign_values = self.refs[c_name]
                 assert len(foreign_values) > 0
             except (KeyError, AssertionError):
                 # Oh no!
@@ -102,7 +149,9 @@ class Generator:
                 log.critical(fmt)
                 exit(1)
             else:
-                data[fk_column.column_name] = random.choice(foreign_values)
+                name = table.name + "__" + c_name
+                chosen = foreign_values[curr_id - 1] if name in self.seq_access else random.choice(foreign_values)
+                data[fk_column.column_name] = chosen
         return data
 
     def _get_column_generator(self, column):
@@ -128,7 +177,7 @@ class Generator:
 
         return generator(column)
 
-    def generate_table_data(self, table: Table, amount: int = 1) -> tuple[dict[str, Result]]:
+    def generate_table_data(self, table: Table, amount: int = 1) -> TABLE_DATA:
         """
         Generate statements for a table.
 
@@ -142,7 +191,7 @@ class Generator:
         return table_name.removeprefix(self.schema + ".") if ignore_schema else table_name
 
     def generate_table_data_for_all(self, num_per_table: dict[str, int], ignore_schema: bool = True) -> \
-            dict[Table, tuple[dict[str, Result]]]:
+            dict[Table, TABLE_DATA]:
         """
         Generate table data for all available tables in the selected database.
 
@@ -152,8 +201,7 @@ class Generator:
         :return: The resulting statement data for all tables.
         """
         # Flush pre-existing data.
-        self.refs.clear()
-        self.unique_values.clear()
+        self._reset_state()
 
         generated_table_data = {}
         for table in self.tables:
